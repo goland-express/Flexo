@@ -33,7 +33,7 @@ Music Discord bot written in [Go](https://go.dev) using [Disgo](https://github.c
 ## Installation
 
 ```bash
-git clone https://github.com/goland-express/Flexo
+git clone https://github.com/goland-express/flexo
 cd flexo
 cp .env.example .env
 # Add Discord token + Lavalink config to .env

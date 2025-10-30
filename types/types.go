@@ -3,7 +3,7 @@ package types
 import (
 	"time"
 
-	"github.com/goland-express/Flexo/player"
+	"github.com/goland-express/flexo/player"
 )
 
 type BotData struct {

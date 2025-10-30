@@ -10,9 +10,9 @@ import (
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgolink/v3/lavalink"
 
-	"github.com/goland-express/Flexo/registry"
-	"github.com/goland-express/Flexo/types"
-	"github.com/goland-express/Flexo/utils"
+	"github.com/goland-express/flexo/registry"
+	"github.com/goland-express/flexo/types"
+	"github.com/goland-express/flexo/utils"
 )
 
 type MusicModule struct{}
