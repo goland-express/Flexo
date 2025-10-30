@@ -50,6 +50,13 @@ go run .
 | [DisgoLink](https://github.com/disgoorg/disgolink)    | Lavalink client        |
 | [Lavalink](https://github.com/lavalink-devs/Lavalink) | Audio streaming server |
 
-## Contributing
+## TODO
 
+- [ ] Queue management commands
+- [ ] Volume control
+- [ ] Loop/repeat modes
+- [ ] Playlist support
+- [ ] Web dashboard
+
+## Contributing
 Pull requests are welcome. For major changes, open an issue first to discuss what you want to change.
