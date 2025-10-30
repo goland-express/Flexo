@@ -2,10 +2,6 @@ package main
 
 import (
 	"context"
-	"flexo/commands"
-	"flexo/player"
-	"flexo/registry"
-	"flexo/types"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -18,18 +14,20 @@ import (
 	"github.com/disgoorg/disgo/cache"
 	"github.com/disgoorg/disgo/events"
 	"github.com/disgoorg/disgo/gateway"
-	"github.com/joho/godotenv"
+
+	"flexo/config"
+	"flexo/modules"
+	"flexo/player"
+	"flexo/registry"
+	"flexo/types"
+	"flexo/utils"
 )
 
 func main() {
-	godotenv.Load()
-	token := os.Getenv("DISCORD_TOKEN")
-	lavalinkHost := os.Getenv("LAVALINK_HOST")
-	lavalinkPassword := os.Getenv("LAVALINK_PASSWORD")
-
-	if token == "" {
-		slog.Error("DISCORD_TOKEN is not set in environment variabls.")
-		return
+	cfg, err := config.Load()
+	if err != nil {
+		slog.Error("Failed to load configuration", slog.Any("error", err))
+		os.Exit(1)
 	}
 
 	botData := &types.BotData{
@@ -38,19 +36,31 @@ func main() {
 
 	reg := registry.New(registry.Options{
 		Data:   botData,
-		Prefix: "!",
+		Prefix: cfg.Prefix,
 		OnError: func(err error, ctx *registry.Context) {
-			slog.Error("Error executing command",
+			if userErr, ok := err.(*utils.UserError); ok {
+				_ = ctx.Reply(userErr.Message)
+				return
+			}
+			slog.Error("An unexpected error occurred",
 				slog.Any("error", err),
-				slog.String("author", ctx.Author().Username),
+				slog.String("guild_id", ctx.GuildID().String()),
+				slog.String("author_id", ctx.Author().ID.String()),
 			)
-			_ = ctx.Say("https://media.discordapp.net/attachments/692443311318892585/1432174798192115763/UuYcrRF.png?ex=69001838&is=68fec6b8&hm=fe6504fca5a9d2d065217b4051a5ce669aa668602df75a413245487fc71ce19b&=&format=webp&quality=lossless&width=864&height=490")
+			_ = ctx.Reply("An unexpected error occurred while running this command.")
 		},
 	})
 
-	commands.Register(reg)
+	loadedModules := []modules.Module{
+		&modules.MusicModule{},
+	}
 
-	client, err := disgo.New(token,
+	for _, module := range loadedModules {
+		module.Register(reg)
+		slog.Info("Module loaded", slog.String("module", module.Name()))
+	}
+
+	client, err := disgo.New(cfg.Token,
 		bot.WithGatewayConfigOpts(
 			gateway.WithIntents(
 				gateway.IntentGuilds,
@@ -70,25 +80,25 @@ func main() {
 				slog.String("username", event.User.Username),
 				slog.String("user_id", event.User.ID.String()),
 				slog.Int("guilds", len(event.Guilds)),
-				slog.String("prefix", "!"),
-				slog.Time("started_at", time.Now()),
+				slog.String("prefix", cfg.Prefix),
 				slog.String("go_version", runtime.Version()),
 				slog.String("disgo_version", disgo.Version),
-				slog.String("os", runtime.GOOS),
-				slog.String("arch", runtime.GOARCH),
-		)
+			)
 
 			go func() {
-				pm, err := player.New(event.User.ID, lavalinkHost, lavalinkPassword)
+				pm, err := player.New(event.User.ID, cfg.LavalinkHost, cfg.LavalinkPassword)
 				if err != nil {
-					slog.Error("Failed to initialize player",
-						slog.Any("error", err),
-					)
+					slog.Error("Failed to initialize player", slog.Any("error", err))
 					slog.Warn("Bot will continue without music features")
 					return
 				}
-
 				botData.Player = pm
+
+				event.Client().EventManager().AddEventListeners(&events.ListenerAdapter{
+					OnGuildVoiceStateUpdate: pm.OnVoiceStateUpdate,
+					OnVoiceServerUpdate:     pm.OnVoiceServerUpdate,
+				})
+
 			}()
 		}),
 	)
@@ -97,19 +107,6 @@ func main() {
 		return
 	}
 
-	client.EventManager().AddEventListeners(&events.ListenerAdapter{
-		OnGuildVoiceStateUpdate: func(event *events.GuildVoiceStateUpdate) {
-			if botData.Player != nil {
-				botData.Player.OnVoiceStateUpdate(event)
-			}
-		},
-		OnVoiceServerUpdate: func(event *events.VoiceServerUpdate) {
-			if botData.Player != nil {
-				botData.Player.OnVoiceServerUpdate(event)
-			}
-		},
-	})
-
 	defer client.Close(context.TODO())
 
 	if err = client.OpenGateway(context.TODO()); err != nil {
@@ -117,6 +114,7 @@ func main() {
 		return
 	}
 
+	slog.Info("Bot is running. Press CTRL-C to exit.")
 	s := make(chan os.Signal, 1)
 	signal.Notify(s, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	<-s

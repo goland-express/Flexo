@@ -2,13 +2,13 @@ package player
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"time"
 
 	"github.com/disgoorg/disgolink/v3/disgolink"
 	"github.com/disgoorg/disgolink/v3/lavalink"
-	"github.com/disgoorg/json"
 	"github.com/disgoorg/snowflake/v2"
 )
 
@@ -20,9 +20,7 @@ type Player struct {
 
 func New(appID snowflake.ID, lavalinkHost, lavalinkPassword string) (*Player, error) {
 	logger := slog.Default()
-
 	queuePlugin := newQueuePlugin(logger)
-
 	client := disgolink.New(appID,
 		disgolink.WithPlugins(queuePlugin),
 	)
@@ -30,9 +28,7 @@ func New(appID snowflake.ID, lavalinkHost, lavalinkPassword string) (*Player, er
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	logger.Info("Connecting to Lavalink...",
-		slog.String("host", lavalinkHost),
-	)
+	logger.Info("Connecting to Lavalink...", slog.String("host", lavalinkHost))
 
 	node, err := client.AddNode(ctx, disgolink.NodeConfig{
 		Name:     "main",
@@ -44,15 +40,12 @@ func New(appID snowflake.ID, lavalinkHost, lavalinkPassword string) (*Player, er
 		return nil, fmt.Errorf("failed to add lavalink node: %w", err)
 	}
 
-	logger.Info("Lavalink node added",
-		slog.String("address", node.Config().Address),
-	)
+	logger.Info("Lavalink node added", slog.String("address", node.Config().Address))
 
 	player := &Player{
 		client: client,
 		logger: logger,
 	}
-
 	return player, nil
 }
 
@@ -122,10 +115,7 @@ func (h *queueEndHandler) OnEventInvocation(player disgolink.Player, data []byte
 		h.logger.Error("Failed to unmarshal QueueEndEvent", slog.Any("err", err))
 		return
 	}
-
-	h.logger.Info("Queue end event received",
-		slog.String("guild_id", e.GuildID.String()),
-	)
+	h.logger.Info("Queue end event received", slog.String("guild_id", e.GuildID.String()))
 }
 
 const (

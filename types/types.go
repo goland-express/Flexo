@@ -1,8 +1,9 @@
 package types
 
 import (
-	"flexo/player"
 	"time"
+
+	"flexo/player"
 )
 
 type BotData struct {

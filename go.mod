@@ -3,6 +3,7 @@ module flexo
 go 1.25.2
 
 require (
+	github.com/caarlos0/env/v11 v11.3.1
 	github.com/disgoorg/disgo v0.18.16
 	github.com/disgoorg/disgolink/v3 v3.0.4
 	github.com/disgoorg/json v1.2.0
