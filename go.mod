@@ -1,4 +1,4 @@
-module flexo
+module github.com/goland-express/Flexo
 
 go 1.25.2
 

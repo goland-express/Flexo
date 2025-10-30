@@ -15,12 +15,12 @@ import (
 	"github.com/disgoorg/disgo/events"
 	"github.com/disgoorg/disgo/gateway"
 
-	"flexo/config"
-	"flexo/modules"
-	"flexo/player"
-	"flexo/registry"
-	"flexo/types"
-	"flexo/utils"
+	"github.com/goland-express/Flexo/config"
+	"github.com/goland-express/Flexo/modules"
+	"github.com/goland-express/Flexo/player"
+	"github.com/goland-express/Flexo/registry"
+	"github.com/goland-express/Flexo/types"
+	"github.com/goland-express/Flexo/utils"
 )
 
 func main() {

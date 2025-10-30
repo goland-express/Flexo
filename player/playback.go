@@ -8,43 +8,57 @@ import (
 	"github.com/disgoorg/disgo/bot"
 	"github.com/disgoorg/disgolink/v3/disgolink"
 	"github.com/disgoorg/disgolink/v3/lavalink"
+	"github.com/disgoorg/json"
 	"github.com/disgoorg/snowflake/v2"
 )
 
-func (p *Player) Play(ctx context.Context, client bot.Client, guildID, channelID snowflake.ID, query string) (*lavalink.Track, error) {
+func (p *Player) Play(ctx context.Context, client bot.Client, guildID, channelID snowflake.ID, query string, userData map[string]any) (*lavalink.Track, int, error) {
 	if err := client.UpdateVoiceState(ctx, guildID, &channelID, false, false); err != nil {
-		return nil, fmt.Errorf("failed to join voice channel: %w", err)
+		return nil, 0, fmt.Errorf("failed to join voice channel: %w", err)
 	}
 
 	track, err := p.loadTrack(ctx, query)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
+
+	rawData, err := json.Marshal(userData)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to marshal user data: %w", err)
+	}
+	track.UserData = rawData
 
 	player := p.client.Player(guildID)
 	currentTrack := player.Track()
 
 	if currentTrack != nil {
+		queue, _ := p.GetQueue(ctx, guildID)
+		position := 1
+		if queue != nil {
+			position = len(queue.Tracks) + 1
+		}
+
 		tracks := []QueueTrack{
-			{Encoded: track.Encoded},
+			{
+				Encoded:  track.Encoded,
+				UserData: userData,
+			},
 		}
-		_, err := p.AddToQueue(ctx, guildID, tracks)
-		if err != nil {
-			p.logger.Warn("Failed to add to queue, playing directly", "error", err)
-			if err := player.Update(ctx, lavalink.WithTrack(*track)); err != nil {
-				return nil, fmt.Errorf("failed to play track: %w", err)
-			}
+
+		if _, err = p.AddToQueue(ctx, guildID, tracks); err != nil {
+			return nil, 0, fmt.Errorf("failed to add track to queue: %w", err)
 		}
-		return track, nil
+		return track, position, nil
 	}
 
 	if err := player.Update(ctx, lavalink.WithTrack(*track)); err != nil {
-		return nil, fmt.Errorf("failed to play track: %w", err)
+		return nil, 0, fmt.Errorf("failed to play track: %w", err)
 	}
-	return track, nil
+
+	return track, 1, nil
 }
 
-func (p *Player) PlayNow(ctx context.Context, client bot.Client, guildID, channelID snowflake.ID, query string) (*lavalink.Track, error) {
+func (p *Player) PlayNow(ctx context.Context, client bot.Client, guildID, channelID snowflake.ID, query string, userData map[string]any) (*lavalink.Track, error) {
 	if err := client.UpdateVoiceState(ctx, guildID, &channelID, false, false); err != nil {
 		return nil, fmt.Errorf("failed to join voice channel: %w", err)
 	}
@@ -53,6 +67,12 @@ func (p *Player) PlayNow(ctx context.Context, client bot.Client, guildID, channe
 	if err != nil {
 		return nil, err
 	}
+
+	rawData, err := json.Marshal(userData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal user data: %w", err)
+	}
+	track.UserData = rawData
 
 	player := p.client.Player(guildID)
 	if err := player.Update(ctx, lavalink.WithTrack(*track)); err != nil {

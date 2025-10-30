@@ -1,6 +1,6 @@
 package modules
 
-import "flexo/registry"
+import "github.com/goland-express/Flexo/registry"
 
 type Module interface {
 	Name() string
