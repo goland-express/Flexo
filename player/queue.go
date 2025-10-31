@@ -3,6 +3,7 @@ package player
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -10,6 +11,12 @@ import (
 	"github.com/disgoorg/disgolink/v3/lavalink"
 	"github.com/disgoorg/json"
 	"github.com/disgoorg/snowflake/v2"
+)
+
+var (
+	ErrQueueEmpty      = errors.New("queue is empty")
+	ErrFailedToStop    = errors.New("failed to stop player")
+	ErrUnmarshalFailed = errors.New("failed to unmarshal response")
 )
 
 type Queue struct {
@@ -27,21 +34,21 @@ type QueueTrack struct {
 
 func (p *Player) GetQueue(ctx context.Context, guildID snowflake.ID) (*Queue, error) {
 	node := p.BestNode()
-	rq, err := http.NewRequestWithContext(ctx, http.MethodGet,
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet,
 		fmt.Sprintf("/v4/sessions/%s/players/%s/queue", node.SessionID(), guildID), nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create request: %w", err)
 	}
 
-	rs, err := node.Rest().Do(rq)
+	response, err := node.Rest().Do(request)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("execute request: %w", err)
 	}
-	defer rs.Body.Close()
+	defer response.Body.Close()
 
 	var queue Queue
-	if err = unmarshalBody(rs, &queue); err != nil {
-		return nil, err
+	if err = unmarshalBody(response, &queue); err != nil {
+		return nil, fmt.Errorf("unmarshal queue: %w", err)
 	}
 
 	return &queue, nil
@@ -49,184 +56,204 @@ func (p *Player) GetQueue(ctx context.Context, guildID snowflake.ID) (*Queue, er
 
 func (p *Player) AddToQueue(ctx context.Context, guildID snowflake.ID, tracks []QueueTrack) (*lavalink.Track, error) {
 	node := p.BestNode()
-	rqBody, err := marshalBody(tracks)
+	requestBody, err := marshalBody(tracks)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("marshal tracks: %w", err)
 	}
 
-	rq, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		fmt.Sprintf("/v4/sessions/%s/players/%s/queue/tracks", node.SessionID(), guildID), rqBody)
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		fmt.Sprintf("/v4/sessions/%s/players/%s/queue/tracks", node.SessionID(), guildID), requestBody)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create request: %w", err)
 	}
-	rq.Header.Add("Content-Type", "application/json")
+	request.Header.Add("Content-Type", "application/json")
 
-	rs, err := node.Rest().Do(rq)
+	response, err := node.Rest().Do(request)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("execute request: %w", err)
 	}
-	defer rs.Body.Close()
+	defer response.Body.Close()
 
-	if rs.StatusCode == http.StatusNoContent {
-		return nil, nil
+	if response.StatusCode == http.StatusNoContent {
+		return nil, ErrQueueEmpty
 	}
 
 	var track lavalink.Track
-	if err = unmarshalBody(rs, &track); err != nil {
-		return nil, err
+	if err = unmarshalBody(response, &track); err != nil {
+		return nil, fmt.Errorf("unmarshal track: %w", err)
 	}
+
 	return &track, nil
 }
 
 func (p *Player) NextTrack(ctx context.Context, guildID snowflake.ID) (*lavalink.Track, error) {
 	node := p.BestNode()
-	rq, err := http.NewRequestWithContext(ctx, http.MethodPost,
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost,
 		fmt.Sprintf("/v4/sessions/%s/players/%s/queue/next?count=1", node.SessionID(), guildID), nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create request: %w", err)
 	}
 
-	rs, err := node.Rest().Do(rq)
+	response, err := node.Rest().Do(request)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("execute request: %w", err)
 	}
-	defer rs.Body.Close()
+	defer response.Body.Close()
 
-	if rs.StatusCode == http.StatusNoContent {
+	if response.StatusCode == http.StatusNoContent {
 		if stopErr := p.Stop(ctx, guildID); stopErr != nil {
-			return nil, fmt.Errorf("queue empty, but failed to stop player: %w", stopErr)
+			return nil, fmt.Errorf("%w: %w", ErrQueueEmpty, errors.Join(ErrFailedToStop, stopErr))
 		}
-		return nil, nil
+		return nil, ErrQueueEmpty
 	}
 
 	var track lavalink.Track
-	if err = unmarshalBody(rs, &track); err != nil {
+	if err = unmarshalBody(response, &track); err != nil {
 		if stopErr := p.Stop(ctx, guildID); stopErr != nil {
-			return nil, fmt.Errorf("failed to unmarshal track and failed to stop player: %w", stopErr)
+			return nil, fmt.Errorf("%w: %w", ErrUnmarshalFailed, errors.Join(ErrFailedToStop, stopErr))
 		}
-		return nil, nil
+		return nil, fmt.Errorf("%w: %w", ErrUnmarshalFailed, err)
 	}
 
 	return &track, nil
 }
+
 func (p *Player) PreviousTrack(ctx context.Context, guildID snowflake.ID) (*lavalink.Track, error) {
 	node := p.BestNode()
-	rq, err := http.NewRequestWithContext(ctx, http.MethodPost,
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost,
 		fmt.Sprintf("/v4/sessions/%s/players/%s/queue/previous?count=1", node.SessionID(), guildID), nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create request: %w", err)
 	}
 
-	rs, err := node.Rest().Do(rq)
+	response, err := node.Rest().Do(request)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("execute request: %w", err)
 	}
-	defer rs.Body.Close()
+	defer response.Body.Close()
 
 	var track lavalink.Track
-	if err = unmarshalBody(rs, &track); err != nil {
-		return nil, err
+	if err = unmarshalBody(response, &track); err != nil {
+		return nil, fmt.Errorf("unmarshal track: %w", err)
 	}
+
 	return &track, nil
 }
 
 func (p *Player) ShuffleQueue(ctx context.Context, guildID snowflake.ID) error {
 	node := p.BestNode()
-	rq, err := http.NewRequestWithContext(ctx, http.MethodPost,
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost,
 		fmt.Sprintf("/v4/sessions/%s/players/%s/queue/shuffle", node.SessionID(), guildID), nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("create request: %w", err)
 	}
 
-	rs, err := node.Rest().Do(rq)
+	response, err := node.Rest().Do(request)
 	if err != nil {
-		return err
+		return fmt.Errorf("execute request: %w", err)
 	}
-	defer rs.Body.Close()
+	defer response.Body.Close()
 
-	return unmarshalBody(rs, nil)
+	if err := unmarshalBody(response, nil); err != nil {
+		return fmt.Errorf("unmarshal response: %w", err)
+	}
+
+	return nil
 }
 
 func (p *Player) ClearQueue(ctx context.Context, guildID snowflake.ID) error {
 	node := p.BestNode()
-	rq, err := http.NewRequestWithContext(ctx, http.MethodDelete,
+	request, err := http.NewRequestWithContext(ctx, http.MethodDelete,
 		fmt.Sprintf("/v4/sessions/%s/players/%s/queue", node.SessionID(), guildID), nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("create request: %w", err)
 	}
 
-	rs, err := node.Rest().Do(rq)
+	response, err := node.Rest().Do(request)
 	if err != nil {
-		return err
+		return fmt.Errorf("execute request: %w", err)
 	}
-	defer rs.Body.Close()
+	defer response.Body.Close()
 
-	return unmarshalBody(rs, nil)
+	if err := unmarshalBody(response, nil); err != nil {
+		return fmt.Errorf("unmarshal response: %w", err)
+	}
+
+	return nil
 }
 
 func (p *Player) RemoveTrack(ctx context.Context, guildID snowflake.ID, trackID int) error {
 	node := p.BestNode()
-	rq, err := http.NewRequestWithContext(ctx, http.MethodDelete,
+	request, err := http.NewRequestWithContext(ctx, http.MethodDelete,
 		fmt.Sprintf("/v4/sessions/%s/players/%s/queue/tracks/%d", node.SessionID(), guildID, trackID), nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("create request: %w", err)
 	}
 
-	rs, err := node.Rest().Do(rq)
+	response, err := node.Rest().Do(request)
 	if err != nil {
-		return err
+		return fmt.Errorf("execute request: %w", err)
 	}
-	defer rs.Body.Close()
+	defer response.Body.Close()
 
-	return unmarshalBody(rs, nil)
+	if err := unmarshalBody(response, nil); err != nil {
+		return fmt.Errorf("unmarshal response: %w", err)
+	}
+
+	return nil
 }
 
 func (p *Player) GetHistory(ctx context.Context, guildID snowflake.ID) ([]lavalink.Track, error) {
 	node := p.BestNode()
-	rq, err := http.NewRequestWithContext(ctx, http.MethodGet,
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet,
 		fmt.Sprintf("/v4/sessions/%s/players/%s/history", node.SessionID(), guildID), nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create request: %w", err)
 	}
 
-	rs, err := node.Rest().Do(rq)
+	response, err := node.Rest().Do(request)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("execute request: %w", err)
 	}
-	defer rs.Body.Close()
+	defer response.Body.Close()
 
 	var history []lavalink.Track
-	if err = unmarshalBody(rs, &history); err != nil {
-		return nil, err
+	if err = unmarshalBody(response, &history); err != nil {
+		return nil, fmt.Errorf("unmarshal history: %w", err)
 	}
 
 	return history, nil
 }
 
-func marshalBody(v any) (io.Reader, error) {
-	b, err := json.Marshal(v)
+func marshalBody(value any) (io.Reader, error) {
+	data, err := json.Marshal(value)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("marshal json: %w", err)
 	}
-	return bytes.NewReader(b), nil
+
+	return bytes.NewReader(data), nil
 }
 
-func unmarshalBody(rs *http.Response, v any) error {
-	if rs.StatusCode < 200 || rs.StatusCode >= 300 {
+func unmarshalBody(response *http.Response, value any) error {
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		var lavalinkError lavalink.Error
-		if err := json.NewDecoder(rs.Body).Decode(&lavalinkError); err != nil {
-			return err
+		if err := json.NewDecoder(response.Body).Decode(&lavalinkError); err != nil {
+			return fmt.Errorf("decode lavalink error: %w", err)
 		}
-		return lavalinkError
+		return fmt.Errorf("lavalink error: %w", lavalinkError)
 	}
 
-	if rs.StatusCode == http.StatusNoContent {
+	if response.StatusCode == http.StatusNoContent {
 		return nil
 	}
 
-	if v == nil {
+	if value == nil {
 		return nil
 	}
 
-	return json.NewDecoder(rs.Body).Decode(v)
+	if err := json.NewDecoder(response.Body).Decode(value); err != nil {
+		return fmt.Errorf("decode json: %w", err)
+	}
+
+	return nil
 }

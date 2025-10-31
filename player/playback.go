@@ -2,6 +2,7 @@ package player
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -10,6 +11,12 @@ import (
 	"github.com/disgoorg/disgolink/v3/lavalink"
 	"github.com/disgoorg/json"
 	"github.com/disgoorg/snowflake/v2"
+)
+
+var (
+	ErrNoResultsFound = errors.New("no results found")
+	ErrNoTrackFound   = errors.New("no track found")
+	ErrNoTracksFound  = errors.New("no tracks found")
 )
 
 func (p *Player) Play(ctx context.Context, client bot.Client, guildID, channelID snowflake.ID, query string, userData map[string]any) (*lavalink.Track, int, error) {
@@ -48,6 +55,7 @@ func (p *Player) Play(ctx context.Context, client bot.Client, guildID, channelID
 		if _, err = p.AddToQueue(ctx, guildID, tracks); err != nil {
 			return nil, 0, fmt.Errorf("failed to add track to queue: %w", err)
 		}
+
 		return track, position, nil
 	}
 
@@ -78,41 +86,61 @@ func (p *Player) PlayNow(ctx context.Context, client bot.Client, guildID, channe
 	if err := player.Update(ctx, lavalink.WithTrack(*track)); err != nil {
 		return nil, fmt.Errorf("failed to play track: %w", err)
 	}
+
 	return track, nil
 }
 
 func (p *Player) Stop(ctx context.Context, guildID snowflake.ID) error {
 	player := p.client.Player(guildID)
-	return player.Update(ctx, lavalink.WithNullTrack())
+	if err := player.Update(ctx, lavalink.WithNullTrack()); err != nil {
+		return fmt.Errorf("failed to stop player: %w", err)
+	}
+
+	return nil
 }
 
 func (p *Player) Pause(ctx context.Context, guildID snowflake.ID, paused bool) error {
 	player := p.client.Player(guildID)
-	return player.Update(ctx, lavalink.WithPaused(paused))
+	if err := player.Update(ctx, lavalink.WithPaused(paused)); err != nil {
+		return fmt.Errorf("failed to pause player: %w", err)
+	}
+
+	return nil
 }
 
 func (p *Player) Seek(ctx context.Context, guildID snowflake.ID, position int64) error {
 	player := p.client.Player(guildID)
-	return player.Update(ctx, lavalink.WithPosition(lavalink.Duration(position)))
+	if err := player.Update(ctx, lavalink.WithPosition(lavalink.Duration(position))); err != nil {
+		return fmt.Errorf("failed to seek player: %w", err)
+	}
+
+	return nil
 }
 
 func (p *Player) SetVolume(ctx context.Context, guildID snowflake.ID, volume int) error {
 	player := p.client.Player(guildID)
-	return player.Update(ctx, lavalink.WithVolume(volume))
+	if err := player.Update(ctx, lavalink.WithVolume(volume)); err != nil {
+		return fmt.Errorf("failed to set volume: %w", err)
+	}
+
+	return nil
 }
 
 func (p *Player) GetCurrentTrack(guildID snowflake.ID) *lavalink.Track {
 	player := p.client.Player(guildID)
+
 	return player.Track()
 }
 
 func (p *Player) IsPlaying(guildID snowflake.ID) bool {
 	player := p.client.Player(guildID)
+
 	return player.Track() != nil && !player.Paused()
 }
 
 func (p *Player) IsPaused(guildID snowflake.ID) bool {
 	player := p.client.Player(guildID)
+
 	return player.Paused()
 }
 
@@ -121,8 +149,10 @@ func (p *Player) loadTrack(ctx context.Context, query string) (*lavalink.Track, 
 		query = "ytsearch:" + query
 	}
 
-	var toPlay *lavalink.Track
-	var searchErr error
+	var (
+		toPlay    *lavalink.Track
+		searchErr error
+	)
 
 	p.client.BestNode().LoadTracksHandler(ctx, query, disgolink.NewResultHandler(
 		func(track lavalink.Track) {
@@ -139,7 +169,7 @@ func (p *Player) loadTrack(ctx context.Context, query string) (*lavalink.Track, 
 			}
 		},
 		func() {
-			searchErr = fmt.Errorf("no results found")
+			searchErr = ErrNoResultsFound
 		},
 		func(err error) {
 			searchErr = err
@@ -151,15 +181,17 @@ func (p *Player) loadTrack(ctx context.Context, query string) (*lavalink.Track, 
 	}
 
 	if toPlay == nil {
-		return nil, fmt.Errorf("no track found")
+		return nil, ErrNoTrackFound
 	}
 
 	return toPlay, nil
 }
 
 func (p *Player) LoadPlaylist(ctx context.Context, url string) ([]lavalink.Track, error) {
-	var tracks []lavalink.Track
-	var searchErr error
+	var (
+		tracks    []lavalink.Track
+		searchErr error
+	)
 
 	p.client.BestNode().LoadTracksHandler(ctx, url, disgolink.NewResultHandler(
 		func(track lavalink.Track) {
@@ -172,7 +204,7 @@ func (p *Player) LoadPlaylist(ctx context.Context, url string) ([]lavalink.Track
 			tracks = searchTracks
 		},
 		func() {
-			searchErr = fmt.Errorf("no results found")
+			searchErr = ErrNoResultsFound
 		},
 		func(err error) {
 			searchErr = err
@@ -184,7 +216,7 @@ func (p *Player) LoadPlaylist(ctx context.Context, url string) ([]lavalink.Track
 	}
 
 	if len(tracks) == 0 {
-		return nil, fmt.Errorf("no tracks found")
+		return nil, ErrNoTracksFound
 	}
 
 	return tracks, nil

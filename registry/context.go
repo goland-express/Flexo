@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/disgoorg/disgo/bot"
@@ -57,21 +58,30 @@ func (c *Context) Say(content string) error {
 	builder := discord.NewMessageCreateBuilder().SetContent(content)
 
 	if c.isSlash {
-		return c.slashData.CreateMessage(builder.Build())
+		if err := c.slashData.CreateMessage(builder.Build()); err != nil {
+			return fmt.Errorf("failed to create slash command response: %w", err)
+		}
+		return nil
 	}
 
 	_, err := c.messageData.Client().Rest().CreateMessage(
 		c.messageData.ChannelID,
 		builder.Build(),
 	)
-	return err
+	if err != nil {
+		return fmt.Errorf("failed to create prefix command message: %w", err)
+	}
+	return nil
 }
 
 func (c *Context) Reply(content string) error {
 	builder := discord.NewMessageCreateBuilder().SetContent(content)
 
 	if c.isSlash {
-		return c.slashData.CreateMessage(builder.Build())
+		if err := c.slashData.CreateMessage(builder.Build()); err != nil {
+			return fmt.Errorf("failed to create slash reply response: %w", err)
+		}
+		return nil
 	}
 
 	builder.SetMessageReference(&discord.MessageReference{
@@ -82,21 +92,30 @@ func (c *Context) Reply(content string) error {
 		c.messageData.ChannelID,
 		builder.Build(),
 	)
-	return err
+	if err != nil {
+		return fmt.Errorf("failed to create prefix reply message: %w", err)
+	}
+	return nil
 }
 
 func (c *Context) SendEmbed(embed discord.Embed) error {
 	builder := discord.NewMessageCreateBuilder().SetEmbeds(embed)
 
 	if c.isSlash {
-		return c.slashData.CreateMessage(builder.Build())
+		if err := c.slashData.CreateMessage(builder.Build()); err != nil {
+			return fmt.Errorf("failed to create slash embed response: %w", err)
+		}
+		return nil
 	}
 
 	_, err := c.messageData.Client().Rest().CreateMessage(
 		c.messageData.ChannelID,
 		builder.Build(),
 	)
-	return err
+	if err != nil {
+		return fmt.Errorf("failed to create prefix embed message: %w", err)
+	}
+	return nil
 }
 
 func (c *Context) Args() []string {

@@ -9,6 +9,6 @@ func Ptr[T any](v T) *T {
 func FormatDuration(ms int) string {
 	seconds := ms / 1000
 	minutes := seconds / 60
-	seconds = seconds % 60
+	seconds %= 60
 	return fmt.Sprintf("%d:%02d", minutes, seconds)
 }

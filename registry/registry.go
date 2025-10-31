@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"fmt"
 	"log/slog"
 	"slices"
 	"strings"
@@ -60,7 +61,6 @@ func (r *Registry) OnMessage(event *events.MessageCreate) {
 	}
 
 	commandName := strings.TrimPrefix(content, r.prefix)
-
 	if idx := strings.Index(commandName, " "); idx != -1 {
 		commandName = commandName[:idx]
 	}
@@ -75,7 +75,6 @@ func (r *Registry) OnMessage(event *events.MessageCreate) {
 
 func (r *Registry) OnSlashCommand(event *events.ApplicationCommandInteractionCreate) {
 	commandName := event.Data.CommandName()
-
 	r.execute(commandName, &Context{
 		client:    event.Client(),
 		slashData: event,
@@ -92,6 +91,7 @@ func (r *Registry) execute(name string, ctx *Context, isSlash bool) {
 		if isSlash && !cmd.SlashCommand {
 			continue
 		}
+
 		if !isSlash && !cmd.PrefixCommand {
 			continue
 		}
@@ -122,7 +122,7 @@ func (r *Registry) RegisterSlash(client bot.Client) error {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	var slashCommands []discord.ApplicationCommandCreate
+	slashCommands := make([]discord.ApplicationCommandCreate, 0, len(r.commands))
 	for _, cmd := range r.commands {
 		if !cmd.SlashCommand {
 			continue
@@ -141,7 +141,7 @@ func (r *Registry) RegisterSlash(client bot.Client) error {
 
 	_, err := client.Rest().SetGlobalCommands(client.ApplicationID(), slashCommands)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to set global commands: %w", err)
 	}
 
 	return nil

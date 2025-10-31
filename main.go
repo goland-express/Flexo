@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -38,10 +39,12 @@ func main() {
 		Data:   botData,
 		Prefix: cfg.Prefix,
 		OnError: func(err error, ctx *registry.Context) {
-			if userErr, ok := err.(*utils.UserError); ok {
+			var userErr *utils.UserError
+			if errors.As(err, &userErr) {
 				_ = ctx.Reply(userErr.Message)
 				return
 			}
+
 			slog.Error("An unexpected error occurred",
 				slog.Any("error", err),
 				slog.String("guild_id", ctx.GuildID().String()),
@@ -92,13 +95,12 @@ func main() {
 					slog.Warn("Bot will continue without music features")
 					return
 				}
-				botData.Player = pm
 
+				botData.Player = pm
 				event.Client().EventManager().AddEventListeners(&events.ListenerAdapter{
 					OnGuildVoiceStateUpdate: pm.OnVoiceStateUpdate,
 					OnVoiceServerUpdate:     pm.OnVoiceServerUpdate,
 				})
-
 			}()
 		}),
 	)
@@ -106,7 +108,6 @@ func main() {
 		slog.Error("Failed to create Disgo client", slog.Any("err", err))
 		return
 	}
-
 	defer client.Close(context.TODO())
 
 	if err = client.OpenGateway(context.TODO()); err != nil {

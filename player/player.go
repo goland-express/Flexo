@@ -109,7 +109,7 @@ func (h *queueEndHandler) Event() lavalink.EventType {
 	return EventTypeQueueEnd
 }
 
-func (h *queueEndHandler) OnEventInvocation(player disgolink.Player, data []byte) {
+func (h *queueEndHandler) OnEventInvocation(_ disgolink.Player, data []byte) {
 	var e QueueEndEvent
 	if err := json.Unmarshal(data, &e); err != nil {
 		h.logger.Error("Failed to unmarshal QueueEndEvent", slog.Any("err", err))
