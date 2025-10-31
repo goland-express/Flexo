@@ -2,7 +2,7 @@
 
 ![Go Version](https://img.shields.io/badge/Go-1.25+-00ADD8?style=flat&logo=go)
 ![License](https://img.shields.io/badge/License-MIT-blue)
-
+[![Go Report Card](https://goreportcard.com/badge/github.com/goland-express/flexo)](https://goreportcard.com/report/github.com/goland-express/flexo)
 <img align="right" src="./branding/Flexo.png" width="150" alt="Flexo logo">
 
 Music Discord bot written in [Go](https://go.dev) using [Disgo](https://github.com/disgoorg/disgo) and [Lavalink](https://github.com/lavalink-devs/Lavalink).
