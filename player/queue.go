@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/disgoorg/disgolink/v3/lavalink"
 	"github.com/disgoorg/json"
@@ -75,7 +76,7 @@ func (p *Player) AddToQueue(ctx context.Context, guildID snowflake.ID, tracks []
 	defer response.Body.Close()
 
 	if response.StatusCode == http.StatusNoContent {
-		return nil, ErrQueueEmpty
+		return nil, nil
 	}
 
 	var track lavalink.Track
@@ -105,6 +106,21 @@ func (p *Player) NextTrack(ctx context.Context, guildID snowflake.ID) (*lavalink
 			return nil, fmt.Errorf("%w: %w", ErrQueueEmpty, errors.Join(ErrFailedToStop, stopErr))
 		}
 		return nil, ErrQueueEmpty
+	}
+
+	if response.StatusCode >= 400 {
+		bodyBytes, readErr := io.ReadAll(response.Body)
+		if readErr == nil && len(bodyBytes) > 0 {
+			bodyStr := string(bodyBytes)
+			if strings.Contains(bodyStr, "No next track found") {
+				if stopErr := p.Stop(ctx, guildID); stopErr != nil {
+					return nil, fmt.Errorf("%w: %w", ErrQueueEmpty, errors.Join(ErrFailedToStop, stopErr))
+				}
+				return nil, ErrQueueEmpty
+			}
+			return nil, fmt.Errorf("lavalink error (status %d): %s", response.StatusCode, bodyStr)
+		}
+		return nil, fmt.Errorf("lavalink error (status %d)", response.StatusCode)
 	}
 
 	var track lavalink.Track

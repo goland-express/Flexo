@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
+	"regexp"
 
 	"github.com/disgoorg/disgo/bot"
 	"github.com/disgoorg/disgolink/v3/disgolink"
@@ -17,6 +17,11 @@ var (
 	ErrNoResultsFound = errors.New("no results found")
 	ErrNoTrackFound   = errors.New("no track found")
 	ErrNoTracksFound  = errors.New("no tracks found")
+)
+
+var (
+	urlPattern    = regexp.MustCompile("^https?://[-a-zA-Z0-9+&@#/%?=~_|!:,.;]*[-a-zA-Z0-9+&@#/%=~_|]?")
+	searchPattern = regexp.MustCompile(`^(.{2})search:(.+)`)
 )
 
 func (p *Player) Play(ctx context.Context, client bot.Client, guildID, channelID snowflake.ID, query string, userData map[string]any) (*lavalink.Track, int, error) {
@@ -144,9 +149,13 @@ func (p *Player) IsPaused(guildID snowflake.ID) bool {
 	return player.Paused()
 }
 
-func (p *Player) loadTrack(ctx context.Context, query string) (*lavalink.Track, error) {
-	if !strings.HasPrefix(query, "http://") && !strings.HasPrefix(query, "https://") {
-		query = "ytsearch:" + query
+func (p *Player) loadTrack(ctx context.Context, query string, source ...string) (*lavalink.Track, error) {
+	identifier := query
+
+	if len(source) > 0 && source[0] != "" {
+		identifier = lavalink.SearchType(source[0]).Apply(identifier)
+	} else if !urlPattern.MatchString(identifier) && !searchPattern.MatchString(identifier) {
+		identifier = lavalink.SearchTypeYouTubeMusic.Apply(identifier)
 	}
 
 	var (
@@ -154,7 +163,7 @@ func (p *Player) loadTrack(ctx context.Context, query string) (*lavalink.Track, 
 		searchErr error
 	)
 
-	p.client.BestNode().LoadTracksHandler(ctx, query, disgolink.NewResultHandler(
+	p.client.BestNode().LoadTracksHandler(ctx, identifier, disgolink.NewResultHandler(
 		func(track lavalink.Track) {
 			toPlay = &track
 		},
@@ -179,11 +188,9 @@ func (p *Player) loadTrack(ctx context.Context, query string) (*lavalink.Track, 
 	if searchErr != nil {
 		return nil, searchErr
 	}
-
 	if toPlay == nil {
 		return nil, ErrNoTrackFound
 	}
-
 	return toPlay, nil
 }
 

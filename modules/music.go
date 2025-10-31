@@ -1,3 +1,4 @@
+// TODO: Improve embeds
 package modules
 
 import (
@@ -110,6 +111,13 @@ func (m *MusicModule) executeSkip(ctx *registry.Context) error {
 
 	track, err := playerManager.NextTrack(context.Background(), guildID)
 	if err != nil {
+		if errors.Is(err, player.ErrQueueEmpty) {
+			embed := buildSkipEmbed(nil)
+			if sendErr := ctx.SendEmbed(embed); sendErr != nil {
+				return fmt.Errorf("failed to send embed: %w", sendErr)
+			}
+			return nil
+		}
 		return fmt.Errorf("failed to skip song: %w", err)
 	}
 
@@ -120,7 +128,6 @@ func (m *MusicModule) executeSkip(ctx *registry.Context) error {
 
 	return nil
 }
-
 func (m *MusicModule) executeQueue(ctx *registry.Context) error {
 	guildID, err := getGuildID(ctx)
 	if err != nil {
@@ -227,21 +234,21 @@ func buildQueueEmbed(ctx *registry.Context, nowPlaying *lavalink.Track, queue *p
 			totalDuration += track.Info.Length
 			if i < 5 {
 				duration := utils.FormatDuration(int(track.Info.Length))
-				sb.WriteString(fmt.Sprintf("**%d.** [%s](%s) - `%s`", i+1, track.Info.Title, *track.Info.URI, duration))
+				sb.WriteString(fmt.Sprintf("`%d.` **[%s](%s)** - `%s`", i+1, track.Info.Title, *track.Info.URI, duration))
 
 				if reqID := getRequesterID(track); reqID != "" {
 					sb.WriteString(fmt.Sprintf("\n- Requested by <@%s>", reqID))
 				}
-				sb.WriteString("\n\n")
+				sb.WriteString("\n")
 			}
 		}
 
 		if len(queue.Tracks) > 5 {
-			sb.WriteString(fmt.Sprintf("\n*...and %d more song(s)*", len(queue.Tracks)-5))
+			sb.WriteString(fmt.Sprintf("*...and %d more song(s)*", len(queue.Tracks)-5))
 		}
 
-		embed.AddField(fmt.Sprintf("Up Next (%d)", len(queue.Tracks)), sb.String(), false)
-		embed.AddField("Total Queue Duration", utils.FormatDuration(int(totalDuration)), true)
+		embed.AddField(fmt.Sprintf("Up Next (%d)", len(queue.Tracks)), sb.String(), true)
+		embed.AddField("Duration", utils.FormatDuration(int(totalDuration)), true)
 	}
 
 	return embed.Build()
@@ -288,6 +295,5 @@ func getRequesterID(track lavalink.Track) string {
 			return reqID
 		}
 	}
-
 	return ""
 }
